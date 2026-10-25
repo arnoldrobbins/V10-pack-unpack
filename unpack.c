@@ -202,7 +202,7 @@ main(int argc, char **argv)
 	argv0 = argv[0];
 	if (**argv == 'p')
 		pcat++;	/* User entered pcat (or /xx/xx/pcat) */
-	if (pcat && argc == 1){
+	if (pcat && argc == 1) {
 		infile = 0;
 		outfile = 1;
 		return getdict();

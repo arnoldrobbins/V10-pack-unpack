@@ -5,10 +5,10 @@ This repository contains the code from Research Version 10 of the
 
 Out of the box, they still compile, but with a lot of warnings.
 
-My goal is to modernize them for a 21st century POSIX system
+I have modernized the code for a 21st century POSIX system
 and compiler.
 
 Arnold Robbins
 
 #### Last modified
-Fri Oct 23 05:52:06 PM EDT 2026
+Sun Oct 25 11:11:47 AM EDT 2026

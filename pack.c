@@ -28,7 +28,7 @@ union FOUR {
 };
 
 /* character counters */
-long	count [END+1];
+long	count[END+1];
 union	FOUR insize;
 long	outsize;
 long	dictsize;
@@ -36,21 +36,21 @@ int	diffbytes;
 
 /* i/o stuff */
 char	vflag = 0;
-char	filename [NAMELEN];
+char	filename[NAMELEN];
 int	infile;		/* unpacked file */
 int	outfile;	/* packed file */
-char	inbuff [BLKSIZE];
-char	outbuff [BLKSIZE+4];
+char	inbuff[BLKSIZE];
+char	outbuff[BLKSIZE+4];
 
 /* variables associated with the tree */
 int	maxlev;
-int	levcount [25];
+int	levcount[25];
 int	lastnode;
-int	parent [2*END+1];
+int	parent[2*END+1];
 
 /* variables associated with the encoding process */
-char	length [END+1];
-long	bits [END+1];
+char	length[END+1];
+long	bits[END+1];
 union	FOUR mask;
 long	inc;
 #ifndef pdp11
@@ -64,7 +64,7 @@ int	n;
 struct	heap {
 	long int count;
 	int node;
-} heap [END+2];
+} heap[END+2];
 #define hmove(a,b) {(b).count = (a).count; (b).node = (a).node;}
 
 /* gather character frequency statistics */
@@ -194,7 +194,7 @@ int packfile ()
 	diffbytes = -1;
 	count[END] = 1;
 	insize.l.lng = n = 0;
-	for (i=END; i>=0; i--) {
+	for (i = END; i >= 0; i--) {
 		parent[i] = 0;
 		if (count[i] > 0) {
 			diffbytes++;
@@ -252,7 +252,7 @@ int packfile ()
 	inc = 1L << 24;
 	inc >>= maxlev;
 	mask.l.lng = 0;
-	for (i=maxlev; i>0; i--) {
+	for (i = maxlev; i > 0; i--) {
 		for (c = 0; c <= END; c++)
 			if (length[c] == i) {
 				bits[c] = mask.l.lng;
@@ -293,7 +293,7 @@ main(int argc, char *argv[])
 			printf(": file name too long\n");
 			continue;
 		}
-		if ((infile = open (filename, 0)) < 0) {
+		if ((infile = open(filename, 0)) < 0) {
 			printf(": cannot open\n");
 			continue;
 		}
@@ -306,12 +306,14 @@ main(int argc, char *argv[])
 			printf(": has links\n");
 			goto closein;
 		}
-		*cp++ = SUF0;  *cp++ = SUF1;  *cp = '\0';
+		*cp++ = SUF0;
+		*cp++ = SUF1;
+		*cp = '\0';
 		if (stat(filename, &ostatus) != -1) {
 			printf(".z: already exists\n");
 			goto closein;
 		}
-		if ((outfile = creat (filename, status.st_mode&07777)) < 0) {
+		if ((outfile = creat(filename, status.st_mode&07777)) < 0) {
 			printf(".z: cannot create\n");
 			goto closein;
 		}
