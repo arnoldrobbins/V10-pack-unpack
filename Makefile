@@ -1,4 +1,4 @@
-CFLAGS = -Od2
+CFLAGS = -O2
 
 all: pack unpack
 pack: pack.o

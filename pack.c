@@ -1,11 +1,14 @@
 /*
- *	Huffman encoding program 
+ *	Huffman encoding program
  *	Adapted April 1979, from program by T.G. Szymanski, March 1978
  *	Usage:	pack [[ - ] filename ... ] filename ...
  *		- option: enable/disable listing of statistics
  */
 
-#include  <stdio.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <utime.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -66,28 +69,30 @@ struct	heap {
 
 /* gather character frequency statistics */
 /* return 1 if successful, 0 otherwise */
-input ()
+int
+input(void)
 {
-	register int i;
-	for (i=0; i<END; i++)
+	int i;
+	for (i = 0; i < END; i++)
 		count[i] = 0;
 	while ((i = read(infile, inbuff, BLKSIZE)) > 0)
 		while (i > 0)
 			count[inbuff[--i]&0377] += 2;
 	if (i == 0)
-		return (1);
-	printf (": read error");
-	return (0);
+		return 1;
+	printf(": read error");
+	return 0;
 }
 
 /* encode the current file */
 /* return 1 if successful, 0 otherwise */
-output ()
+int
+output(void)
 {
 	int c, i, inleft;
 	char *inp;
-	register char **q, *outp;
-	register int bitsleft;
+	char **q, *outp;
+	int bitsleft;
 	long temp;
 
 	/* output ``PACKED'' header */
@@ -95,17 +100,17 @@ output ()
 	outbuff[1] = 036; 	/* ascii RS */
 	/* output the length and the dictionary */
 	temp = insize.l.lng;
-	for (i=5; i>=2; i--) {
+	for (i = 5; i >= 2; i--) {
 		outbuff[i] =  (char) (temp & 0377);
 		temp >>= 8;
 	}
 	outp = &outbuff[6];
 	*outp++ = maxlev;
-	for (i=1; i<maxlev; i++)
+	for (i = 1; i < maxlev; i++)
 		*outp++ = levcount[i];
 	*outp++ = levcount[maxlev]-2;
-	for (i=1; i<=maxlev; i++)
-		for (c=0; c<END; c++)
+	for (i = 1; i <= maxlev; i++)
+		for (c = 0; c < END; c++)
 			if (length[c] == i)
 				*outp++ = c;
 	dictsize = outp-&outbuff[0];
@@ -119,8 +124,8 @@ output ()
 		if (inleft <= 0) {
 			inleft = read(infile, inp = &inbuff[0], BLKSIZE);
 			if (inleft < 0) {
-				printf (": read error");
-				return (0);
+				printf(": read error");
+				return 0;
 			}
 		}
 		c = (--inleft < 0) ? END : (*inp++ & 0377);
@@ -137,8 +142,8 @@ output ()
 		}
 		if (outp >= &outbuff[BLKSIZE]) {
 			if (write(outfile, outbuff, BLKSIZE) != BLKSIZE) {
-wrerr:				printf (".z: write error");
-				return (0);
+wrerr:				printf(".z: write error");
+				return 0;
 			}
 			((union FOUR *) outbuff)->l.lng = ((union FOUR *) &outbuff[BLKSIZE])->l.lng;
 			outp -= BLKSIZE;
@@ -147,17 +152,18 @@ wrerr:				printf (".z: write error");
 	} while (c != END);
 	if (bitsleft < 8)
 		outp++;
-	c = outp-outbuff;
+	c = outp - outbuff;
 	if (write(outfile, outbuff, c) != c)
 		goto wrerr;
 	outsize += c;
-	return (1);
+	return 1;
 }
 
 /* makes a heap out of heap[i],...,heap[n] */
-heapify (i)
+void
+heapify(int i)
 {
-	register int k;
+	int k;
 	int lastparent;
 	struct heap heapsubi;
 	hmove (heap[i], heapsubi);
@@ -177,12 +183,12 @@ heapify (i)
 /* return 1 after successful packing, 0 otherwise */
 int packfile ()
 {
-	register int c, i, p;
+	int c, i, p;
 	long bitsout;
 
 	/* gather frequency statistics */
 	if (input() == 0)
-		return (0);
+		return 0;
 
 	/* put occurring chars in heap with their counts */
 	diffbytes = -1;
@@ -198,7 +204,7 @@ int packfile ()
 		}
 	}
 	insize.l.lng >>= 1;
-	for (i=n/2; i>=1; i--)
+	for (i = n / 2; i >= 1; i--)
 		heapify(i);
 
 	/* build Huffman tree */
@@ -218,11 +224,11 @@ int packfile ()
 
 	/* assign lengths to encoding for each character */
 	bitsout = maxlev = 0;
-	for (i=1; i<=24; i++)
+	for (i = 1; i <= 24; i++)
 		levcount[i] = 0;
-	for (i=0; i<=END; i++) {
+	for (i = 0; i <= END; i++) {
 		c = 0;
-		for (p=parent[i]; p!=0; p=parent[p])
+		for (p = parent[i]; p != 0; p = parent[p])
 			c++;
 		levcount[c]++;
 		length[i] = c;
@@ -232,14 +238,14 @@ int packfile ()
 	}
 	if (maxlev > 24) {
 		/* can't occur unless insize.l.lng >= 2**24 */
-		printf (": Huffman tree has too many levels");
-		return(0);
+		printf(": Huffman tree has too many levels");
+		return 0;
 	}
 
 	/* bitch if no compression, but do it anyway */
-	outsize = ((bitsout+7)>>3)+6+maxlev+diffbytes;
-	if ((insize.l.lng+BLKSIZE-1)/BLKSIZE <= (outsize+BLKSIZE-1)/BLKSIZE) {
-		printf (": no saving");
+	outsize = ((bitsout + 7) >> 3) + 6 + maxlev + diffbytes;
+	if ((insize.l.lng + BLKSIZE-1)/BLKSIZE <= (outsize+BLKSIZE-1) / BLKSIZE) {
+		printf(": no saving");
 	}
 
 	/* compute bit patterns for each character */
@@ -247,7 +253,7 @@ int packfile ()
 	inc >>= maxlev;
 	mask.l.lng = 0;
 	for (i=maxlev; i>0; i--) {
-		for (c=0; c<=END; c++)
+		for (c = 0; c <= END; c++)
 			if (length[c] == i) {
 				bits[c] = mask.l.lng;
 				mask.l.lng += inc;
@@ -256,65 +262,66 @@ int packfile ()
 		inc <<= 1;
 	}
 
-	return (output());
+	return output();
 }
 
-main(argc, argv)
-int argc; char *argv[];
+int
+main(int argc, char *argv[])
 {
-	register int i;
-	register char *cp;
+	int i;
+	char *cp;
 	int k, sep;
-	int fcount =0; /* count failures */
+	int fcount = 0;	/* count failures */
 
-	for (k=1; k<argc; k++)
-	{       if (argv[k][0] == '-' && argv[k][1] == '\0')
-		{       vflag = 1 - vflag;
+	for (k = 1; k < argc; k++)
+	{
+		if (argv[k][0] == '-' && argv[k][1] == '\0') {
+			vflag = 1 - vflag;
 			continue;
 		}
 		fcount++; /* increase failure count - expect the worst */
-		printf ("%s: %s", argv[0], argv[k]);
-		sep = -1;  cp = filename;
-		for (i=0; i < (NAMELEN-3) && (*cp = argv[k][i]); i++)
+		printf("%s: %s", argv[0], argv[k]);
+		sep = -1;
+		cp = filename;
+		for (i = 0; i < (NAMELEN - 3) && (*cp = argv[k][i]); i++)
 			if (*cp++ == '/') sep = i;
-		if (cp[-1]==SUF1 && cp[-2]==SUF0)
-		{	printf (": already packed\n");
+		if (cp[-1]==SUF1 && cp[-2]==SUF0) {
+			printf(": already packed\n");
 			continue;
 		}
-		if (i >= (NAMELEN-3) || (i-sep) > 13)
-		{       printf (": file name too long\n");
+		if (i >= (NAMELEN-3) || (i-sep) > 13) {
+			printf(": file name too long\n");
 			continue;
 		}
-		if ((infile = open (filename, 0)) < 0)
-		{       printf (": cannot open\n");
+		if ((infile = open (filename, 0)) < 0) {
+			printf(": cannot open\n");
 			continue;
 		}
 		fstat(infile,&status);
-		if (status.st_mode&040000)
-		{       printf (": cannot pack a directory\n");
+		if (S_ISDIR(status.st_mode)) {
+			printf(": cannot pack a directory\n");
 			goto closein;
 		}
-		if( status.st_nlink != 1 )
-		{	printf(": has links\n");
+		if (status.st_nlink != 1) {	
+			printf(": has links\n");
 			goto closein;
 		}
 		*cp++ = SUF0;  *cp++ = SUF1;  *cp = '\0';
-		if( stat(filename, &ostatus) != -1)
-		{
+		if (stat(filename, &ostatus) != -1) {
 			printf(".z: already exists\n");
 			goto closein;
 		}
-		if ((outfile = creat (filename, status.st_mode&07777)) < 0)
-		{       printf (".z: cannot create\n");
+		if ((outfile = creat (filename, status.st_mode&07777)) < 0) {
+			printf(".z: cannot create\n");
 			goto closein;
 		}
-		chown (filename, status.st_uid, status.st_gid);
+		int junk = chown(filename, status.st_uid, status.st_gid);
 
-		if (packfile())
-		{       unlink(argv[k]);
+		if (packfile()) {
+			unlink(argv[k]);
 			fcount--;  /* success after all */
-			if(insize.l.lng != 0){
-				printf (": %.1f%% Compression\n",
+			if (insize.l.lng != 0) {
+				printf(": %.1f%% Compression\n",
 					((double)(-outsize+(insize.l.lng))/(double)insize.l.lng)*100);
 				/* output statistics */
 				if (vflag) {
@@ -322,22 +329,27 @@ int argc; char *argv[];
 					printf("	Huffman tree has %d levels below root\n", maxlev);
 					printf("	%d distinct bytes in input\n", diffbytes);
 					printf("	dictionary overhead = %ld bytes\n", dictsize);
-					printf("	effective  entropy  = %.2f bits/byte\n", 
+					printf("	effective  entropy  = %.2f bits/byte\n",
 						((double) outsize / (double) insize.l.lng) * 8 );
-					printf("	asymptotic entropy  = %.2f bits/byte\n", 
+					printf("	asymptotic entropy  = %.2f bits/byte\n",
 						((double) (outsize-dictsize) / (double) insize.l.lng) * 8 );
 				}
 			}
-			else printf(": empty file\n");
+			else
+				printf(": empty file\n");
 		}
-		else
-		{       printf (" - file unchanged\n");
+		else {
+			printf(" - file unchanged\n");
 			unlink(filename);
 		}
 
       closein:	close (outfile);
 		close (infile);
-		utime(filename, &status.st_atime);/* preserve acc & mod times */
+		struct utimbuf utbuf = {
+			status.st_atime,
+			status.st_mtime,
+		};
+		utime(filename, &utbuf);	/* preserve acc & mod times */
 	}
 	return (fcount);
 }

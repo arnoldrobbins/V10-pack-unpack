@@ -4,14 +4,13 @@
  *	or	unpack filename...
  */
 
-static char unpackvers[] = "@(#)unpack.c	1.10";
-
 #include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <setjmp.h>
+#include <utime.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-
-#define VOID (void)
 
 jmp_buf env;
 struct	stat status;
@@ -45,11 +44,19 @@ char	*tree[25];
 char	characters[256];
 char	*eof;
 
+void eprintf(char *s);
+int decode(void);
+int getword(void);
+void putch(int c);
+void expand(void);
+int getch(void);
+
 /* read in the dictionary portion and build decoding structures */
 /* return 1 if successful, 0 otherwise */
-getdict ()
+int
+getdict(void)
 {
-	register int c, i, nchildren;
+	int c, i, nchildren;
 
 	/*
 	 * check two-byte header
@@ -61,37 +68,37 @@ getdict ()
 	eof = &characters[0];
 
 	inbuff[6] = 25;
-	inleft = read (infile, &inbuff[0], BUFSIZ);
+	inleft = read(infile, &inbuff[0], BUFSIZ);
 	if (inleft < 0) {
 		eprintf (".z: read error");
-		return (0);
+		return 0;
 	}
 	if (inbuff[0] != US)
 		goto goof;
 
 	if (inbuff[1] == US) {		/* oldstyle packing */
-		if (setjmp (env))
-			return (0);
-		expand ();
-		return (1);
+		if (setjmp(env))
+			return 0;
+		expand();
+		return 1;
 	}
 	if (inbuff[1] != RS)
 		goto goof;
 
 	inp = &inbuff[2];
 	origsize = 0;
-	for (i=0; i<4; i++)
-		origsize = origsize*256 + ((*inp++) & 0377);
+	for (i = 0; i < 4; i++)
+		origsize = origsize * 256 + ((*inp++) & 0377);
 	maxlev = *inp++ & 0377;
 	if (maxlev > 24) {
-goof:		eprintf (".z: not in packed format");
-		return (0);
+goof:		eprintf(".z: not in packed format");
+		return 0;
 	}
-	for (i=1; i<=maxlev; i++)
+	for (i = 1; i <= maxlev; i++)
 		intnodes[i] = *inp++ & 0377;
-	for (i=1; i<=maxlev; i++) {
+	for (i = 1; i <= maxlev; i++) {
 		tree[i] = eof;
-		for (c=intnodes[i]; c>0; c--) {
+		for (c = intnodes[i]; c > 0; c--) {
 			if (eof >= &characters[255])
 				goto goof;
 			*eof++ = *inp++;
@@ -109,19 +116,20 @@ goof:		eprintf (".z: not in packed format");
 	 */
 
 	nchildren = 0;
-	for (i=maxlev; i>=1; i--) {
+	for (i = maxlev; i >= 1; i--) {
 		c = intnodes[i];
 		intnodes[i] = nchildren /= 2;
 		nchildren += c;
 	}
-	return (decode ());
+	return decode();
 }
 
 /* unpack the file */
 /* return 1 if successful, 0 otherwise */
-decode ()
+int
+decode(void)
 {
-	register int bitsleft, c, i;
+	int bitsleft, c, i;
 	int j, lev;
 	char *p;
 
@@ -130,16 +138,17 @@ decode ()
 	i = 0;
 	while (1) {
 		if (inleft <= 0) {
-			inleft = read (infile, inp = &inbuff[0], BUFSIZ);
+			inleft = read(infile, inp = &inbuff[0], BUFSIZ);
 			if (inleft < 0) {
-				eprintf (".z: read error");
-				return (0);
+				eprintf(".z: read error");
+				return 0;
 			}
 		}
 		if (--inleft < 0) {
-uggh:			if(origsize == 0) return 1;
-			eprintf (".z: unpacking error");
-			return (0);
+uggh:			if (origsize == 0)
+				return 1;
+			eprintf(".z: unpacking error");
+			return 0;
 		}
 		c = *inp++;
 		bitsleft = 8;
@@ -152,18 +161,18 @@ uggh:			if(origsize == 0) return 1;
 				p = &tree[lev][j];
 				if (p == eof) {
 					c = outp - &outbuff[0];
-					if (write (outfile, &outbuff[0], c) != c) {
-wrerr:						eprintf (": write error");
-						return (0);
+					if (write(outfile, &outbuff[0], c) != c) {
+wrerr:						eprintf(": write error");
+						return 0;
 					}
 					origsize -= c;
 					if (origsize != 0)
 						goto uggh;
-					return (1);
+					return 1;
 				}
 				*outp++ = *p;
 				if (outp == &outbuff[BUFSIZ]) {
-					if (write (outfile, outp = &outbuff[0], BUFSIZ) != BUFSIZ)
+					if (write(outfile, outp = &outbuff[0], BUFSIZ) != BUFSIZ)
 						goto wrerr;
 					origsize -= BUFSIZ;
 				}
@@ -175,32 +184,35 @@ wrerr:						eprintf (": write error");
 	}
 }
 
-main (argc, argv)
-	char *argv[];
+int
+main(int argc, char **argv)
 {
-	register i, k;
+	int i, k;
 	int sep, pcat = 0;
-	register char *p1, *cp;
+	char *p1, *cp;
 	int fcount = 0;		/* failure count */
 
 	p1 = *argv;
-	while(*p1++);		/* Point p1 to end of argv[0] string */
-	while(--p1 >= *argv)
-		if(*p1 == '/')break;
+	while (*p1++)		/* Point p1 to end of argv[0] string */
+		continue;
+	while (--p1 >= *argv)
+		if(*p1 == '/')
+			break;
 	*argv = p1 + 1;
 	argv0 = argv[0];
-	if(**argv == 'p')pcat++;	/* User entered pcat (or /xx/xx/pcat) */
-	if(pcat && argc == 1){
+	if (**argv == 'p')
+		pcat++;	/* User entered pcat (or /xx/xx/pcat) */
+	if (pcat && argc == 1){
 		infile = 0;
 		outfile = 1;
 		return getdict();
 	}
-	for (k=1; k<argc; k++) {
+	for (k = 1; k < argc; k++) {
 		errorm = 0;
 		sep = -1;
 		cp = filename;
 		argvk = argv[k];
-		for (i=0; i < (NAMELEN-3) && (*cp = argvk[i]); i++)
+		for (i = 0; i < (NAMELEN - 3) && (*cp = argvk[i]); i++)
 			if (*cp++ == '/')
 				sep = i;
 		if (cp[-1] == SUF1 && cp[-2] == SUF0) {
@@ -210,70 +222,73 @@ main (argc, argv)
 		}
 
 		fcount++;	/* expect the worst */
-		if (i >= (NAMELEN-3) || (i - sep) > 13) {
-			eprintf (": file name too long");
+		if (i >= (NAMELEN - 3) /* || (i - sep) > 13 */) {	// FIXME one day
+			eprintf(": file name too long");
 			goto done;
 		}
 		*cp++ = SUF0;
 		*cp++ = SUF1;
 		*cp = '\0';
-		if ((infile = open (filename, 0)) == -1) {
-			eprintf (".z: cannot open");
+		if ((infile = open(filename, 0)) == -1) {
+			eprintf(".z: cannot open");
 			goto done;
 		}
 
 		if (pcat)
 			outfile = 1;	/* standard output */
 		else {
-			if (stat (argvk, &status) != -1) {
-				eprintf (": already exists");
+			if (stat(argvk, &status) != -1) {
+				eprintf(": already exists");
 				goto done;
 			}
-			VOID fstat (infile, &status);
+			(void) fstat(infile, &status);
 			if (status.st_nlink != 1)
-				eprintf (".z: Warning: file has links");
-			if ((outfile = creat (argvk, status.st_mode&07777)) == -1) {
-				eprintf (": cannot create");
+				eprintf(".z: Warning: file has links");
+			if ((outfile = creat(argvk, status.st_mode&07777)) == -1) {
+				eprintf(": cannot create");
 				goto done;
 			}
 
-			if (chmod (argvk, status.st_mode) != 0)
-			    printf("can't change mode to %o\n", status.st_mode);
-			VOID chown (argvk, status.st_uid, status.st_gid);
+			if (chmod(argvk, status.st_mode) != 0)
+				fprintf(stderr, "can't change mode to %o\n", status.st_mode);
+			int junk = chown (argvk, status.st_uid, status.st_gid);
 		}
 
-		if (getdict ()) {	/* unpack */
+		if (getdict()) {	/* unpack */
 			fcount--; 	/* success after all */
 			if (!pcat) {
-				eprintf (": unpacked");
-				VOID unlink (filename);
+				eprintf(": unpacked");
+				(void) unlink(filename);
 
 				/*
 				 * preserve acc & mod dates
 				 */
-				VOID utime (argvk, &status.st_atime);
+				struct utimbuf utbuf = {
+					status.st_atime,
+					status.st_mtime,
+				};
+				(void) utime(argvk, &utbuf);
 			}
 		}
-		else
-			if (!pcat)
-				VOID unlink (argvk);
+		else if (!pcat)
+			(void) unlink (argvk);
 done:		if (errorm)
-			VOID fprintf (stderr, "\n");
-		VOID close (infile);
+			(void) fprintf(stderr, "\n");
+		(void) close(infile);
 		if (!pcat)
-			VOID close (outfile);
+			(void) close(outfile);
 	}
-	return (fcount);
+	return fcount;
 }
 
-eprintf (s)
-	char *s;
+void
+eprintf(char *s)
 {
 	if (!errorm) {
 		errorm = 1;
-		VOID fprintf (stderr, "%s: %s", argv0, argvk);
+		(void) fprintf(stderr, "%s: %s", argv0, argvk);
 	}
-	VOID fprintf (stderr, s);
+	(void) fprintf(stderr, "%s", s);
 }
 
 /*
@@ -283,21 +298,22 @@ eprintf (s)
 
 int	Tree[1024];
 
-expand ()
+void
+expand(void)
 {
-	register tp, bit;
+	int tp, bit;
 	short word;
 	int keysize, i, *t;
 
 	outp = outbuff;
 	inp = &inbuff[2];
 	inleft -= 2;
-	origsize = ((long) (unsigned) getwd ())*256*256;
-	origsize += (unsigned) getwd ();
+	origsize = ((long) (unsigned) getword())*256*256;
+	origsize += (unsigned) getword();
 	t = Tree;
-	for (keysize = getwd (); keysize--; ) {
-		if ((i = getch ()) == 0377)
-			*t++ = getwd ();
+	for (keysize = getword(); keysize--;) {
+		if ((i = getch()) == 0377)
+			*t++ = getword();
 		else
 			*t++ = i & 0377;
 	}
@@ -305,58 +321,60 @@ expand ()
 	bit = tp = 0;
 	for (;;) {
 		if (bit <= 0) {
-			word = getwd ();
+			word = getword();
 			bit = 16;
 		}
 		tp += Tree[tp + (word<0)];
 		word <<= 1;
 		bit--;
 		if (Tree[tp] == 0) {
-			putch (Tree[tp+1]);
+			putch(Tree[tp+1]);
 			tp = 0;
 			if ((origsize -= 1) == 0) {
-				write (outfile, outbuff, outp - outbuff);
+				int junk = write(outfile, outbuff, outp - outbuff);
 				return;
 			}
 		}
 	}
 }
 
-getch ()
+int
+getch(void)
 {
 	if (inleft <= 0) {
-		inleft = read (infile, inp = inbuff, BUFSIZ);
+		inleft = read(infile, inp = inbuff, BUFSIZ);
 		if (inleft < 0) {
-			eprintf (".z: read error");
-			longjmp (env, 1);
+			eprintf(".z: read error");
+			longjmp(env, 1);
 		}
 	}
 	inleft--;
 	return (*inp++ & 0377);
 }
 
-getwd ()
+int
+getword(void)
 {
-	register char c;
-	register d;
-	c = getch ();
-	d = getch ();
+	char c;
+	int d;
+	c = getch();
+	d = getch();
 	d <<= 8;
 	d |= c & 0377;
-	return (d);
+	return d;
 }
 
-putch (c)
-	char c;
+void
+putch(int c)
 {
-	register n;
+	int n;
 
 	*outp++ = c;
 	if (outp == &outbuff[BUFSIZ]) {
-		n = write (outfile, outp = outbuff, BUFSIZ);
+		n = write(outfile, outp = outbuff, BUFSIZ);
 		if (n < BUFSIZ) {
-			eprintf (": write error");
-			longjmp (env, 2);
+			eprintf(": write error");
+			longjmp(env, 2);
 		}
 	}
 }
